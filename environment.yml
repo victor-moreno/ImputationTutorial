@@ -1,12 +1,13 @@
 channels:
   - bioconda
 dependencies:
-  - r-base=3.6
+  - r-base=4.0
   - r-r.utils
   - r-knitr
+  - r-data.table
+  - r-rmarkdown
   - plink 
   - vcftools 
   - perl-vcftools-vcf 
   - bcftools 
-  - p7zip
   - ucsc-liftover
