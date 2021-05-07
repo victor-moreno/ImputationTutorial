@@ -1,6 +1,12 @@
 channels:
-  - conda-forge
+  - bioconda
 dependencies:
   - r-base=3.6
-  - r-tidyverse
-  
+  - r-r.utils
+  - r-knitr
+  - plink 
+  - vcftools 
+  - perl-vcftools-vcf 
+  - bcftools 
+  - p7zip
+  - ucsc-liftover
