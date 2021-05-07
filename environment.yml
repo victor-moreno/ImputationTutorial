@@ -11,3 +11,4 @@ dependencies:
   - perl-vcftools-vcf 
   - bcftools 
   - ucsc-liftover
+  - p7zip
