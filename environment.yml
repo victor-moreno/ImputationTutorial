@@ -2,7 +2,7 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - r-base=4.0
+  - r-base=4.0.3
   - r-r.utils
   - r-knitr
   - r-data.table
