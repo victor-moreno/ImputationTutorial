@@ -1,5 +1,3 @@
 wget -q -O Practical.tar.gz "https://cuda.odap-ico.org/imputation/Practical.tar.gz"
 tar xzf Practical.tar.gz
 rm Practical.tar.gz
-
-ln -s /srv/conda/envs/notebook/bin/liftOver /home/jovyan/Practical/liftover/liftOver
