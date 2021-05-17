@@ -13,3 +13,4 @@ dependencies:
   - bcftools 
   - ucsc-liftover
   - p7zip
+  
