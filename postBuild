@@ -1,4 +1,3 @@
 wget -q -O Practical.tar.gz "https://cuda.odap-ico.org/imputation/Practical.tar.gz"
 tar xzf Practical.tar.gz
 rm Practical.tar.gz
-
