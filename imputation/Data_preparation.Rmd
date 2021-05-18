@@ -1,0 +1,266 @@
+---
+title: "Imputation Pipeline: DATA PREPARATION"
+output: html_document
+author: "ADV - ODAP - ICO"
+date: "`r Sys.Date()`"
+params:
+  dataDir:
+    label: "dataDir"
+    value: ""
+  plinkFile:
+    label: "plinkFile:"
+    value: ""
+  assembly:
+    label: "assembly:"
+    value: ""
+---
+
+```{r setup, include=FALSE}
+
+library(knitr)
+
+dir.create("./Data2Impute/",showWarnings=FALSE)
+outputDir<-"./Data2Impute/"
+
+# Read bim
+bim <- read.table(paste0(dataDir, plinkFile, ".bim"), header = FALSE, stringsAsFactors = FALSE, sep = "\t")
+
+
+```
+
+<br>
+
+Data must be prepared to upload to the TopMed Imputation Server.
+
+<br>
+
+### Requisites:
+
+------ Programs ------
+
+* R 4.0.3
+
+* plink 1.9
+
+* vcftools-0.1.16
+
+* python-2.7.18
+
+* bcftools-1.12
+
+* perl-5.26.2
+
+* perl-vcftools-vcf-0.1.16
+
+------ Data ------
+
+* Data must be in plink format (bed + bim + fam)
+
+------ liftover ------
+
+<https://github.com/sritchie73/liftOverPlink/blob/master/liftOverPlink.py>
+
+* liftover/liftOverPlink.py 
+* liftover/liftOver
+* liftover/hg18ToHg38.over.chain.gz if assemby is hg18
+
+------ bim check ------
+
+<https://www.well.ox.ac.uk/-wrayner/tools/>
+
+* bimcheck/HRC-1000G-check-bim.pl
+* bimcheck/CreateTOPMed.pl
+* bimcheck/PASS.Variants.TOPMed_freeze5_hg38_chr20_dbSNP.tab
+
+To obtain PASS.Variants.TOPMed_freeze5_hg38_chr20_dbSNP.tab file:
+
+1.- Download it
+
+system("curl 'https://bravo.sph.umich.edu/freeze5/hg38/download/all' -H 'Accept-Encoding: gzip, deflate, br' -H --compressed > ALL.TOPMed_freeze5_hg38_dbSNP.vcf.gz")
+
+2.- Once downloaded the VCF can be converted to an HRC formatted reference legend using the code here: CreateTOPMed.zip
+
+system("perl ./CreateTOPMed.pl -i ALL.TOPMed_freeze5_hg38_dbSNP.vcf.gz")
+
+!!! 10 hours of execution!!!
+
+3.- FOR THIS EXAMPLE WE EXTRACT CHR20
+
+system("zcat /mnt/typhon/data/references/SNPs/TOPMed/PASS.Variants.TOPMed_freeze5_hg38_dbSNP.tab.gz | awk '$1 == 20' | gzip -c > /mnt/hydra/ubs/shared/users/Anna/GENRISK/bimcheck/PASS.Variants.TOPMed_freeze5_hg38_chr20_dbSNP.tab.gz")
+
+<br>  
+
+
+### a) Remove non valid SNPs
+
+```{r, eval=TRUE, echo=FALSE, warning=FALSE, results='asis', error=FALSE}
+
+cat("\n")
+cat("* Filter SNPs in autosomal or X chromosome")
+cat("\n")
+
+chrom <- c(seq(1,23),"X")
+bim <- bim[bim$V1%in%chrom,]
+
+cat("\n")
+cat("* Filter SNPs with A, T, C or G alleles")
+cat("\n")
+
+bim <- bim[bim$V5%in%c("A","C","T","G") & bim$V6%in%c("A","C","T","G"),]
+
+cat("\n")
+cat("* Remove multiple mapping SNPs")
+cat("\n")
+
+sp <- bim[,c(2, 4)]
+sp <- sp$pos[duplicated(sp)]
+if(length(sp)>0) bim <- bim[!bim$pos%in%sp,]
+
+write.table(bim$V2, paste0(dataDir, "ValidSNPs.txt"), sep = "\t", quote = FALSE, col.names = FALSE, row.names = FALSE)
+
+# Filter in valid SNPs
+system(paste0("plink --bfile ", dataDir, plinkFile, " --extract ", dataDir, "ValidSNPs.txt --maf 0.00001 --recode --output-chr M --out liftover/", plinkFile))
+
+# remove some files
+unlink(paste0("liftover/",plinkFile,".log"))
+unlink(paste0(dataDir,"ValidSNPs.txt"))
+
+```
+
+<br>
+
+### a) LiftOver:
+
+Transform data from hg18 to hg38.
+
+```{r, eval=TRUE, echo=FALSE, warning=FALSE, results='asis', error=FALSE}
+
+system(paste0("chmod 755 liftover/liftOverPlink.py"))
+# system(paste0("chmod 755 liftover/liftOver"))
+system(paste0("python2 liftover/liftOverPlink.py -m liftover/", plinkFile,".map -p liftover/", plinkFile,".ped -o liftover/", plinkFile,"_liftover -c liftover/",assembly,"ToHg38.over.chain.gz -e liftOver"))
+
+unlink(paste0("liftover/", plinkFile,".ped"))
+unlink(paste0("liftover/", plinkFile,".map"))
+
+```
+
+<br>
+
+### c) Check bim
+https://www.well.ox.ac.uk/-wrayner/tools/
+
+This program produces a file called Run-plink.sh with different plink orders to match data to refrence
+
+```{r, eval=TRUE, echo=FALSE, warning=FALSE, results='asis', error=FALSE}
+
+cat("\n")
+cat("* Transform ped/map to bim/bed/fam")
+cat("\n")
+
+system(paste0("plink --file liftover/", plinkFile,"_liftover --output-chr M --make-bed --out bimcheck/", plinkFile))
+
+cat("\n")
+cat("* Allele frequency calculation")
+cat("\n")
+
+system(paste0("plink --bfile bimcheck/", plinkFile," --freq --out bimcheck/", plinkFile))
+
+unlink(paste0("bimcheck/", plinkFile,".log"))
+
+```
+
+```{r, eval=TRUE, echo=FALSE, warning=FALSE, results='asis', error=FALSE}
+
+cat("\n")
+cat("* Check bim file")
+cat("\n")
+
+system(paste0("chmod 755 bimcheck/HRC-1000G-check-bim.pl"))
+system(paste0("perl bimcheck/HRC-1000G-check-bim.pl -h -r bimcheck/PASS.Variants.TOPMed_freeze5_hg38_chr20_dbSNP.tab.gz -b bimcheck/",plinkFile,".bim -f bimcheck/",plinkFile,".frq -c -p EUR -o bimcheck/"))
+
+cat("\n")
+cat("* run Run.sh")
+cat("\n")
+system(paste0("chmod 755 bimcheck/Run-plink.sh"))
+system(paste0("bimcheck/Run-plink.sh"))
+
+unlink("bimcheck/TEMP*")
+
+
+# Despite Run-plink.sh creates a vcf, "chr" is missing in chromosome information. We will use plink format to create the vcf file.
+
+
+###############################################
+## Remove some files after checking all is ok
+
+unlink(paste0("bimcheck/", plinkFile, "-updated-chr20.vcf"))
+unlink(paste0("bimcheck/", plinkFile, "-updated-chr20.log"))
+
+unlink(paste0("bimcheck/", plinkFile, "-updated.bed"))
+unlink(paste0("bimcheck/", plinkFile, "-updated.bim"))
+unlink(paste0("bimcheck/", plinkFile, "-updated.fam"))
+unlink(paste0("bimcheck/", plinkFile, "-updated.log"))
+
+unlink(paste0("bimcheck/", plinkFile, ".bed"))
+unlink(paste0("bimcheck/", plinkFile, ".bim"))
+unlink(paste0("bimcheck/", plinkFile, ".fam"))
+unlink(paste0("bimcheck/", plinkFile, ".frq"))
+
+```
+
+<br>
+
+### d) Chromosome X heterozygosity in males 
+Remember to set as missing those heterozygous SNPs from male samples in chrX and create and check vcf files to impute
+Not executed for this exemple as only chr20 is included!!!!
+
+<br>
+
+### e) Create, sort and index vcf.gz file
+
+```{r, eval=TRUE, echo=FALSE, warning=FALSE, results='asis', error=FALSE}
+
+cat("\n")
+cat("* Save refrence allele")
+cat("\n")
+
+bim <- read.table(paste0("bimcheck/", plinkFile, "-updated-chr20.bim"), sep = "\t", header = FALSE, stringsAsFactors = FALSE)
+write.table(bim[,c(2,6)], file = paste0("bimcheck/snps.txt"), sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+
+cat("\n")
+cat("* Convert bed to VCF file")
+cat("\n")
+
+system(paste0("plink --bfile bimcheck/", plinkFile, "-updated-chr20 --reference-allele bimcheck/snps.txt --chr-output chrM --recode vcf --out ", outputDir, plinkFile, ""))
+
+
+cat("\n")
+cat("* Create a sorted *.vcf.gz file")
+cat("\n")
+
+system(paste0("vcf-sort ",outputDir,plinkFile, ".vcf | bgzip -c > ",outputDir,plinkFile, ".vcf.gz"))
+
+cat("\n")
+cat("* Index the VCF")
+cat("\n")
+
+system(paste0("bcftools index ", outputDir,plinkFile, ".vcf.gz"))
+
+# remove some files 
+unlink("bimcheck/snps.txt")
+unlink(paste0(outputDir, plinkFile, ".log"))
+unlink(paste0(outputDir, plinkFile, ".vcf"))
+
+```
+
+<br>
+
+#### Output files:
+
+The output files of the Data Preparation are:
+
+* Results of the liftover (map and ped files) and a file with the unlifted SNPs (unlifted).
+
+* Results of the bimcheck analysis in the bimcheck folder: Different files with lists of SNPs that have been modified and plinks files for each chormosome (bed, bim and fam).
+
+* vcf.gz and vcf.gz.csi for each chromosome (autosomes and chrX) in the Data2Impute folder. This files are the ones to be uploaded to TopMed Imputation Server.
