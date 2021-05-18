@@ -7,8 +7,10 @@
 Based on:
 https://github.com/binder-examples/r-conda
 
-postBuild loads the tutorial files [Practical.tar.gz](https://cuda.odap-ico.org/imputation/Practical.tar.gz), not available here because are 170Mb
+postBuild loads the tutorial files [Practical.tar.gz](https://cuda.odap-ico.org/imputation/Practical.tar.gz), not available here because are 170Mb, folder imputation contains R and Rmd files only.
+
 
 Image will run [RStudio](https://www.rstudio.com/) on launch
 
 Go to folder ~/Practical and load Imputation_Pipeline.R
+
